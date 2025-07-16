@@ -6,6 +6,7 @@ public class ChatClientGUI {
     private JFrame frame;
     private JTextArea chatArea;
     private JTextField inputField;
+    private JButton sendButton;
 
     public ChatClientGUI() {
    
@@ -18,7 +19,14 @@ public class ChatClientGUI {
         chatArea = new JTextArea();
         chatArea.setEditable(false);
 
+
         inputField = new JTextField();
+
+        sendButton = new JButton("Enviar");
+        
+        JPanel inputPanel = new JPanel(new BorderLayout());
+        inputPanel.add(inputField, BorderLayout.CENTER);
+        inputPanel.add(sendButton, BorderLayout.EAST);
 
         
         frame.add(chatArea, BorderLayout.CENTER);
