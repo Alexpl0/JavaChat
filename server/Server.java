@@ -1,4 +1,4 @@
-package com.server;
+// Removed package declaration to match the expected package
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -8,14 +8,17 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.stream.Collectors;
 
 /**
  * La clase Server es el programa principal que actúa como el centro de nuestro chat.
+ * Su responsabilidad es escuchar y aceptar conexiones entrantes de los clientes
+ * y gestionar la comunicación entre ellos.
  */
 public class Server {
 
     private static final int PORT = 9090;
+    // Usamos CopyOnWriteArrayList para evitar ConcurrentModificationException
+    // al iterar y modificar la lista de clientes desde diferentes hilos. Es thread-safe.
     private static List<ClientHandler> clients = new CopyOnWriteArrayList<>();
 
     public static void main(String[] args) {
@@ -49,29 +52,15 @@ public class Server {
     }
 
     /**
-     * Retransmite la lista actualizada de usuarios a todos los clientes.
-     */
-    public static void broadcastUserList() {
-        // Recolectamos los nombres de todos los clientes conectados.
-        String userList = clients.stream()
-                                 .map(ClientHandler::getUsername)
-                                 .filter(username -> username != null && !username.isEmpty())
-                                 .collect(Collectors.joining(","));
-        // Enviamos el comando especial con la lista.
-        broadcastMessage("!USERLIST " + userList);
-    }
-
-    /**
      * Elimina un cliente de la lista y anuncia su partida.
      * @param clientHandler El manejador del cliente a eliminar.
      */
     public static void removeClient(ClientHandler clientHandler) {
         clients.remove(clientHandler);
-        System.out.println("[SERVER] Cliente desconectado: " + clientHandler.getUsername() + ". Clientes restantes: " + clients.size());
+        // Solo anunciamos la partida si el usuario logró registrar un nombre.
         if (clientHandler.getUsername() != null) {
+            System.out.println("[SERVER] Cliente desconectado: " + clientHandler.getUsername() + ". Clientes restantes: " + clients.size());
             broadcastMessage("[SERVER] " + clientHandler.getUsername() + " ha abandonado el chat.");
-            // Actualizamos la lista de usuarios para todos los que quedan.
-            broadcastUserList();
         }
     }
 }
@@ -100,26 +89,33 @@ class ClientHandler implements Runnable {
             out = new PrintWriter(clientSocket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 
+            // --- Tarea 3.1: Inicia el protocolo para solicitar el nombre ---
             out.println("SUBMITNAME");
+            
+            // --- Tarea 3.3 (Recepción): Lee el nombre que el cliente envía ---
             this.username = in.readLine();
             if (this.username == null || this.username.trim().isEmpty()) {
                 this.username = "Anonimo-" + (int)(Math.random() * 1000);
             }
             
             System.out.println("[SERVER] " + clientSocket.getInetAddress().getHostAddress() + " ahora es " + username);
+            
+            // --- Tarea 3.5: Anuncia al nuevo usuario a todos los demás ---
             Server.broadcastMessage("[SERVER] " + username + " se ha unido al chat.");
-            // Enviamos la lista de usuarios actualizada a todos.
-            Server.broadcastUserList();
 
+            // --- Bucle de Chat ---
             String inputLine;
             while ((inputLine = in.readLine()) != null) {
+                // --- Tarea 3.4: Antepone el nombre de usuario al mensaje ---
                 String formattedMessage = "[" + username + "]: " + inputLine;
                 System.out.println("[MESSAGE_RECEIVED] De " + username + ": " + inputLine);
+                // Retransmite el mensaje formateado a todos.
                 Server.broadcastMessage(formattedMessage);
             }
         } catch (IOException e) {
             System.out.println("[HANDLER_ERROR] Conexión perdida con " + (username != null ? username : "un cliente"));
         } finally {
+            // Limpieza de recursos y notificación de desconexión
             Server.removeClient(this);
             try {
                 if (in != null) in.close();
