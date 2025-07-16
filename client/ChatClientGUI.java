@@ -1,5 +1,5 @@
 import java.awt.*;
-import javax.swing.*;  
+import javax.swing.*;
 
 public class ChatClientGUI {
 
@@ -9,29 +9,24 @@ public class ChatClientGUI {
     private JButton sendButton;
 
     public ChatClientGUI() {
-   
         frame = new JFrame("Cliente de Chat");
         frame.setSize(500, 400);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setLayout(new BorderLayout());  
 
-    
         chatArea = new JTextArea();
         chatArea.setEditable(false);
-
-        JScrollPane scrollPane = new JScrollPane(chatArea);
-
         inputField = new JTextField();
 
         sendButton = new JButton("Enviar");
-
         JPanel inputPanel = new JPanel(new BorderLayout());
         inputPanel.add(inputField, BorderLayout.CENTER);
         inputPanel.add(sendButton, BorderLayout.EAST);
 
-        
-        frame.add(chatArea, BorderLayout.CENTER);
-        frame.add(inputField, BorderLayout.SOUTH);
+        JScrollPane scrollPane = new JScrollPane(chatArea);
+
+        frame.setLayout(new BorderLayout());
+        frame.add(scrollPane, BorderLayout.CENTER);
+        frame.add(inputPanel, BorderLayout.SOUTH);
 
         frame.setVisible(true);
     }
