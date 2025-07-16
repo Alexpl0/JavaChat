@@ -19,11 +19,12 @@ public class ChatClientGUI {
         chatArea = new JTextArea();
         chatArea.setEditable(false);
 
+        JScrollPane scrollPane = new JScrollPane(chatArea);
 
         inputField = new JTextField();
 
         sendButton = new JButton("Enviar");
-        
+
         JPanel inputPanel = new JPanel(new BorderLayout());
         inputPanel.add(inputField, BorderLayout.CENTER);
         inputPanel.add(sendButton, BorderLayout.EAST);
