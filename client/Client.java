@@ -1,4 +1,3 @@
-package com.client;
 // Importamos las clases necesarias para la comunicación en red y manejo de I/O.
 import java.io.BufferedReader;
 import java.io.IOException;
