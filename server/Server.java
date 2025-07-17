@@ -4,6 +4,8 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -16,6 +18,7 @@ public class Server {
 
     private static final int PORT = 9090;
     private static List<ClientHandler> clients = new CopyOnWriteArrayList<>();
+    private static final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm");
 
     public static void main(String[] args) {
         System.out.println("[SERVER] El servidor de chat se está iniciando...");
@@ -28,7 +31,8 @@ public class Server {
                 System.out.println("[SERVER] Nuevo cliente conectado: " + clientSocket.getInetAddress().getHostAddress());
                 
                 ClientHandler clientHandler = new ClientHandler(clientSocket);
-                clients.add(clientHandler);
+                // No añadimos el cliente a la lista principal hasta que tenga un nombre válido.
+                // Se hará desde el propio ClientHandler.
                 new Thread(clientHandler).start();
             }
         } catch (IOException e) {
@@ -38,34 +42,45 @@ public class Server {
     }
 
     /**
-     * Retransmite un mensaje a todos los clientes conectados.
-     * @param message El mensaje a enviar.
+     * Tarea 6.3: Verifica si un nombre de usuario ya está en uso.
+     * Es 'synchronized' para evitar problemas de concurrencia si dos usuarios
+     * intentan registrarse con el mismo nombre al mismo tiempo.
+     * @param username El nombre a verificar.
+     * @return true si el nombre ya está tomado, false en caso contrario.
      */
+    public static synchronized boolean isUsernameTaken(String username) {
+        return clients.stream().anyMatch(client -> username.equalsIgnoreCase(client.getUsername()));
+    }
+
+    /**
+     * Tarea 6.3: Añade un cliente a la lista de clientes activos.
+     * @param clientHandler El manejador del cliente a añadir.
+     */
+    public static void addClient(ClientHandler clientHandler) {
+        clients.add(clientHandler);
+    }
+
     public static void broadcastMessage(String message) {
+        String timestamp = dtf.format(LocalDateTime.now());
+        String messageWithTimestamp = "[" + timestamp + "] " + message;
+        
         for (ClientHandler client : clients) {
-            client.sendMessage(message);
+            client.sendMessage(messageWithTimestamp);
         }
     }
     
-    /**
-     * Tarea 5.1: Envía un mensaje privado de un remitente a un destinatario.
-     * @param message El mensaje a enviar.
-     * @param sender El manejador del cliente que envía el mensaje.
-     * @param recipientUsername El nombre de usuario del destinatario.
-     */
     public static void sendPrivateMessage(String message, ClientHandler sender, String recipientUsername) {
         Optional<ClientHandler> recipient = clients.stream()
                 .filter(client -> recipientUsername.equalsIgnoreCase(client.getUsername()))
                 .findFirst();
+        
+        String timestamp = dtf.format(LocalDateTime.now());
 
         if (recipient.isPresent()) {
-            // Envía el mensaje privado al destinatario
-            recipient.get().sendMessage("(Privado de " + sender.getUsername() + "): " + message);
-            // Envía una confirmación al remitente
-            sender.sendMessage("(Mensaje para " + recipientUsername + "): " + message);
+            recipient.get().sendMessage("[" + timestamp + "] (Privado de " + sender.getUsername() + "): " + message);
+            sender.sendMessage("[" + timestamp + "] (Mensaje para " + recipientUsername + "): " + message);
         } else {
-            // Informa al remitente si el usuario no fue encontrado
-            sender.sendMessage("[SERVER] Usuario '" + recipientUsername + "' no encontrado o no está conectado.");
+            sender.sendMessage("[" + timestamp + "] [SERVER] Usuario '" + recipientUsername + "' no encontrado o no está conectado.");
         }
     }
 
@@ -74,7 +89,9 @@ public class Server {
                                  .map(ClientHandler::getUsername)
                                  .filter(username -> username != null && !username.isEmpty())
                                  .collect(Collectors.joining(","));
-        broadcastMessage("!USERLIST " + userList);
+        for (ClientHandler client : clients) {
+            client.sendMessage("!USERLIST " + userList);
+        }
     }
 
     public static void removeClient(ClientHandler clientHandler) {
@@ -111,10 +128,24 @@ class ClientHandler implements Runnable {
             out = new PrintWriter(clientSocket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 
-            out.println("SUBMITNAME");
-            this.username = in.readLine();
-            if (this.username == null || this.username.trim().isEmpty()) {
-                this.username = "Anonimo-" + (int)(Math.random() * 1000);
+            // --- Tarea 6.3: Bucle de autenticación ---
+            // El cliente no será añadido a la lista principal hasta que tenga un nombre válido.
+            while (true) {
+                out.println("SUBMITNAME");
+                String name = in.readLine();
+
+                if (name == null || name.trim().isEmpty()) {
+                    name = "Anonimo-" + (int)(Math.random() * 1000);
+                }
+
+                if (!Server.isUsernameTaken(name)) {
+                    this.username = name;
+                    Server.addClient(this); // Añadimos el cliente a la lista de activos
+                    out.println("NAME_ACCEPTED"); // Enviamos la confirmación al cliente
+                    break; // Salimos del bucle de autenticación
+                } else {
+                    out.println("NAME_REJECTED"); // Enviamos el rechazo al cliente
+                }
             }
             
             System.out.println("[SERVER] " + clientSocket.getInetAddress().getHostAddress() + " ahora es " + username);
@@ -123,18 +154,15 @@ class ClientHandler implements Runnable {
 
             String inputLine;
             while ((inputLine = in.readLine()) != null) {
-                // Tarea 5.1: Comprobar si es un mensaje privado
                 if (inputLine.startsWith("/msg")) {
                     String[] parts = inputLine.split(" ", 3);
                     if (parts.length == 3) {
-                        String recipient = parts[1];
-                        String message = parts[2];
-                        Server.sendPrivateMessage(message, this, recipient);
+                        Server.sendPrivateMessage(parts[2], this, parts[1]);
                     } else {
-                        sendMessage("[SERVER] Formato incorrecto. Usa: /msg <usuario> <mensaje>");
+                        String timestamp = DateTimeFormatter.ofPattern("HH:mm").format(LocalDateTime.now());
+                        sendMessage("[" + timestamp + "] [SERVER] Formato incorrecto. Usa: /msg <usuario> <mensaje>");
                     }
                 } else {
-                    // Si no, es un mensaje público
                     String formattedMessage = "[" + username + "]: " + inputLine;
                     System.out.println("[MESSAGE_RECEIVED] De " + username + ": " + inputLine);
                     Server.broadcastMessage(formattedMessage);
