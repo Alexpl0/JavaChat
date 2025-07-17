@@ -1,9 +1,13 @@
+// server/Server.java
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+// Tarea 6.2: Importamos las clases necesarias para manejar fechas y horas.
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -16,6 +20,9 @@ public class Server {
 
     private static final int PORT = 9090;
     private static List<ClientHandler> clients = new CopyOnWriteArrayList<>();
+    // Tarea 6.2: Creamos un formateador de tiempo estático para usarlo en todo el servidor.
+    // El formato "HH:mm" mostrará la hora y los minutos, por ejemplo: "17:30".
+    private static final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm");
 
     public static void main(String[] args) {
         System.out.println("[SERVER] El servidor de chat se está iniciando...");
@@ -38,17 +45,21 @@ public class Server {
     }
 
     /**
-     * Retransmite un mensaje a todos los clientes conectados.
-     * @param message El mensaje a enviar.
+     * Retransmite un mensaje a todos los clientes, añadiéndole un timestamp.
+     * @param message El mensaje original a enviar.
      */
     public static void broadcastMessage(String message) {
+        // Tarea 6.2: Obtenemos la hora actual y la formateamos.
+        String timestamp = dtf.format(LocalDateTime.now());
+        String messageWithTimestamp = "[" + timestamp + "] " + message;
+        
         for (ClientHandler client : clients) {
-            client.sendMessage(message);
+            client.sendMessage(messageWithTimestamp);
         }
     }
     
     /**
-     * Tarea 5.1: Envía un mensaje privado de un remitente a un destinatario.
+     * Envía un mensaje privado, añadiéndole un timestamp.
      * @param message El mensaje a enviar.
      * @param sender El manejador del cliente que envía el mensaje.
      * @param recipientUsername El nombre de usuario del destinatario.
@@ -57,15 +68,16 @@ public class Server {
         Optional<ClientHandler> recipient = clients.stream()
                 .filter(client -> recipientUsername.equalsIgnoreCase(client.getUsername()))
                 .findFirst();
+        
+        // Tarea 6.2: Obtenemos la hora actual para añadirla a los mensajes.
+        String timestamp = dtf.format(LocalDateTime.now());
 
         if (recipient.isPresent()) {
-            // Envía el mensaje privado al destinatario
-            recipient.get().sendMessage("(Privado de " + sender.getUsername() + "): " + message);
-            // Envía una confirmación al remitente
-            sender.sendMessage("(Mensaje para " + recipientUsername + "): " + message);
+            // Formateamos el mensaje para el destinatario y el remitente, ambos con timestamp.
+            recipient.get().sendMessage("[" + timestamp + "] (Privado de " + sender.getUsername() + "): " + message);
+            sender.sendMessage("[" + timestamp + "] (Mensaje para " + recipientUsername + "): " + message);
         } else {
-            // Informa al remitente si el usuario no fue encontrado
-            sender.sendMessage("[SERVER] Usuario '" + recipientUsername + "' no encontrado o no está conectado.");
+            sender.sendMessage("[" + timestamp + "] [SERVER] Usuario '" + recipientUsername + "' no encontrado o no está conectado.");
         }
     }
 
@@ -74,7 +86,11 @@ public class Server {
                                  .map(ClientHandler::getUsername)
                                  .filter(username -> username != null && !username.isEmpty())
                                  .collect(Collectors.joining(","));
-        broadcastMessage("!USERLIST " + userList);
+        // El comando !USERLIST es un comando de sistema, por lo que no le añadimos timestamp.
+        // Lo enviamos directamente a través del método de cada cliente.
+        for (ClientHandler client : clients) {
+            client.sendMessage("!USERLIST " + userList);
+        }
     }
 
     public static void removeClient(ClientHandler clientHandler) {
@@ -123,7 +139,6 @@ class ClientHandler implements Runnable {
 
             String inputLine;
             while ((inputLine = in.readLine()) != null) {
-                // Tarea 5.1: Comprobar si es un mensaje privado
                 if (inputLine.startsWith("/msg")) {
                     String[] parts = inputLine.split(" ", 3);
                     if (parts.length == 3) {
@@ -131,10 +146,11 @@ class ClientHandler implements Runnable {
                         String message = parts[2];
                         Server.sendPrivateMessage(message, this, recipient);
                     } else {
-                        sendMessage("[SERVER] Formato incorrecto. Usa: /msg <usuario> <mensaje>");
+                        // Este es un mensaje de error solo para este usuario, así que lo enviamos directamente.
+                        String timestamp = DateTimeFormatter.ofPattern("HH:mm").format(LocalDateTime.now());
+                        sendMessage("[" + timestamp + "] [SERVER] Formato incorrecto. Usa: /msg <usuario> <mensaje>");
                     }
                 } else {
-                    // Si no, es un mensaje público
                     String formattedMessage = "[" + username + "]: " + inputLine;
                     System.out.println("[MESSAGE_RECEIVED] De " + username + ": " + inputLine);
                     Server.broadcastMessage(formattedMessage);
@@ -154,6 +170,10 @@ class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Envía un mensaje directamente a este cliente.
+     * @param message El mensaje completo ya formateado.
+     */
     public void sendMessage(String message) {
         out.println(message);
     }
