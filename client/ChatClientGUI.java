@@ -21,7 +21,6 @@ public class ChatClientGUI {
     private PrintWriter out;
 
     public ChatClientGUI() {
-        // Se ha eliminado la librería externa para simplificar.
         initializeGUI();
         connectToServer();
     }
@@ -57,10 +56,9 @@ public class ChatClientGUI {
         inputPanel.add(inputField, BorderLayout.CENTER);
         inputPanel.add(sendButton, BorderLayout.EAST);
 
-        // Se elimina la barra superior y el botón de ajustes.
         frame.add(scrollPane, BorderLayout.CENTER);
         frame.add(inputPanel, BorderLayout.SOUTH);
-        frame.setVisible(true);
+        // Hacemos visible el frame al final, después de la autenticación.
     }
     
     private void connectToServer() {
@@ -69,43 +67,36 @@ public class ChatClientGUI {
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             out = new PrintWriter(socket.getOutputStream(), true);
 
-            new Thread(() -> {
-                try {
-                    String line;
-                    while ((line = in.readLine()) != null) {
-                        final String finalLine = line;
-                        SwingUtilities.invokeLater(() -> {
-                             if (finalLine.equals("SUBMITNAME")) {
-                                String name = JOptionPane.showInputDialog(frame, "Ingresa tu nombre de usuario:");
-                                out.println(name != null && !name.trim().isEmpty() ? name.trim() : "Anónimo");
-                            } else {
-                                SimpleAttributeSet attr = new SimpleAttributeSet();
-                                StyleConstants.setFontFamily(attr, "SansSerif");
-                                StyleConstants.setFontSize(attr, 14);
-
-                                if (finalLine.startsWith("(Privado") || finalLine.startsWith("(Mensaje para")) {
-                                    StyleConstants.setItalic(attr, true);
-                                    StyleConstants.setForeground(attr, new Color(0x008B8B)); // Un color cian oscuro
-                                } else if (finalLine.startsWith("[SERVER]")) {
-                                    StyleConstants.setBold(attr, true);
-                                    StyleConstants.setForeground(attr, Color.GRAY);
-                                }
-                                
-                                appendMessage(finalLine, attr);
-                            }
-                        });
-                    }
-                } catch (IOException e) {
-                    appendErrorMessage("[ERROR] Conexión perdida con el servidor.");
+            // Tarea 6.4: Bucle de autenticación que maneja el rechazo de nombres.
+            while (true) {
+                String line = in.readLine();
+                if (line == null) { // El servidor cerró la conexión antes de tiempo
+                    JOptionPane.showMessageDialog(frame, "El servidor cerró la conexión inesperadamente.", "Error", JOptionPane.ERROR_MESSAGE);
+                    return;
                 }
-            }).start();
+
+                if (line.startsWith("SUBMITNAME")) {
+                    String name = JOptionPane.showInputDialog(frame, "Elige un nombre de usuario:", "Nombre de Usuario", JOptionPane.PLAIN_MESSAGE);
+                    out.println(name != null ? name.trim() : "");
+                } else if (line.startsWith("NAME_REJECTED")) {
+                    JOptionPane.showMessageDialog(frame, "Ese nombre de usuario ya está en uso. Por favor, elige otro.", "Nombre no disponible", JOptionPane.ERROR_MESSAGE);
+                } else if (line.startsWith("NAME_ACCEPTED")) {
+                    frame.setTitle("Java Chat - " + in.readLine()); // El servidor podría enviar el nombre final
+                    frame.setVisible(true); // Mostramos la ventana principal solo después de ser aceptados
+                    break; // Salimos del bucle de autenticación
+                }
+            }
+
+            // Una vez autenticados, iniciamos el hilo principal de escucha.
+            new Thread(new ServerListener()).start();
 
         } catch (IOException e) {
-            JOptionPane.showMessageDialog(frame, "No se pudo conectar al servidor:\n" + e.getMessage(),
-                    "Error de conexión", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(frame, "No se pudo conectar al servidor:\n" + e.getMessage(), "Error de conexión", JOptionPane.ERROR_MESSAGE);
             System.exit(1);
         }
     }
+    
+    // El resto del código permanece igual...
 
     private void appendMessage(String message, AttributeSet attr) {
         try {
@@ -130,6 +121,36 @@ public class ChatClientGUI {
         if (!message.isEmpty()) {
             out.println(message);
             inputField.setText("");
+        }
+    }
+    
+    private class ServerListener implements Runnable {
+        @Override
+        public void run() {
+            try {
+                String serverMessage;
+                while ((serverMessage = in.readLine()) != null) {
+                    final String finalMessage = serverMessage;
+                    SwingUtilities.invokeLater(() -> {
+                        // Aquí ya no necesitamos manejar la autenticación, solo mensajes de chat.
+                        SimpleAttributeSet attr = new SimpleAttributeSet();
+                        StyleConstants.setFontFamily(attr, "SansSerif");
+                        StyleConstants.setFontSize(attr, 14);
+
+                        if (finalMessage.contains("(Privado de") || finalMessage.contains("(Mensaje para")) {
+                            StyleConstants.setItalic(attr, true);
+                            StyleConstants.setForeground(attr, new Color(0x008B8B));
+                        } else if (finalMessage.contains("[SERVER]")) {
+                            StyleConstants.setBold(attr, true);
+                            StyleConstants.setForeground(attr, Color.GRAY);
+                        }
+                        
+                        appendMessage(finalMessage, attr);
+                    });
+                }
+            } catch (IOException e) {
+                appendErrorMessage("[ERROR] Conexión perdida con el servidor.");
+            }
         }
     }
 

@@ -1,11 +1,9 @@
-// server/Server.java
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
-// Tarea 6.2: Importamos las clases necesarias para manejar fechas y horas.
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -20,8 +18,6 @@ public class Server {
 
     private static final int PORT = 9090;
     private static List<ClientHandler> clients = new CopyOnWriteArrayList<>();
-    // Tarea 6.2: Creamos un formateador de tiempo estático para usarlo en todo el servidor.
-    // El formato "HH:mm" mostrará la hora y los minutos, por ejemplo: "17:30".
     private static final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm");
 
     public static void main(String[] args) {
@@ -35,7 +31,8 @@ public class Server {
                 System.out.println("[SERVER] Nuevo cliente conectado: " + clientSocket.getInetAddress().getHostAddress());
                 
                 ClientHandler clientHandler = new ClientHandler(clientSocket);
-                clients.add(clientHandler);
+                // No añadimos el cliente a la lista principal hasta que tenga un nombre válido.
+                // Se hará desde el propio ClientHandler.
                 new Thread(clientHandler).start();
             }
         } catch (IOException e) {
@@ -45,11 +42,25 @@ public class Server {
     }
 
     /**
-     * Retransmite un mensaje a todos los clientes, añadiéndole un timestamp.
-     * @param message El mensaje original a enviar.
+     * Tarea 6.3: Verifica si un nombre de usuario ya está en uso.
+     * Es 'synchronized' para evitar problemas de concurrencia si dos usuarios
+     * intentan registrarse con el mismo nombre al mismo tiempo.
+     * @param username El nombre a verificar.
+     * @return true si el nombre ya está tomado, false en caso contrario.
      */
+    public static synchronized boolean isUsernameTaken(String username) {
+        return clients.stream().anyMatch(client -> username.equalsIgnoreCase(client.getUsername()));
+    }
+
+    /**
+     * Tarea 6.3: Añade un cliente a la lista de clientes activos.
+     * @param clientHandler El manejador del cliente a añadir.
+     */
+    public static void addClient(ClientHandler clientHandler) {
+        clients.add(clientHandler);
+    }
+
     public static void broadcastMessage(String message) {
-        // Tarea 6.2: Obtenemos la hora actual y la formateamos.
         String timestamp = dtf.format(LocalDateTime.now());
         String messageWithTimestamp = "[" + timestamp + "] " + message;
         
@@ -58,22 +69,14 @@ public class Server {
         }
     }
     
-    /**
-     * Envía un mensaje privado, añadiéndole un timestamp.
-     * @param message El mensaje a enviar.
-     * @param sender El manejador del cliente que envía el mensaje.
-     * @param recipientUsername El nombre de usuario del destinatario.
-     */
     public static void sendPrivateMessage(String message, ClientHandler sender, String recipientUsername) {
         Optional<ClientHandler> recipient = clients.stream()
                 .filter(client -> recipientUsername.equalsIgnoreCase(client.getUsername()))
                 .findFirst();
         
-        // Tarea 6.2: Obtenemos la hora actual para añadirla a los mensajes.
         String timestamp = dtf.format(LocalDateTime.now());
 
         if (recipient.isPresent()) {
-            // Formateamos el mensaje para el destinatario y el remitente, ambos con timestamp.
             recipient.get().sendMessage("[" + timestamp + "] (Privado de " + sender.getUsername() + "): " + message);
             sender.sendMessage("[" + timestamp + "] (Mensaje para " + recipientUsername + "): " + message);
         } else {
@@ -86,8 +89,6 @@ public class Server {
                                  .map(ClientHandler::getUsername)
                                  .filter(username -> username != null && !username.isEmpty())
                                  .collect(Collectors.joining(","));
-        // El comando !USERLIST es un comando de sistema, por lo que no le añadimos timestamp.
-        // Lo enviamos directamente a través del método de cada cliente.
         for (ClientHandler client : clients) {
             client.sendMessage("!USERLIST " + userList);
         }
@@ -127,10 +128,24 @@ class ClientHandler implements Runnable {
             out = new PrintWriter(clientSocket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 
-            out.println("SUBMITNAME");
-            this.username = in.readLine();
-            if (this.username == null || this.username.trim().isEmpty()) {
-                this.username = "Anonimo-" + (int)(Math.random() * 1000);
+            // --- Tarea 6.3: Bucle de autenticación ---
+            // El cliente no será añadido a la lista principal hasta que tenga un nombre válido.
+            while (true) {
+                out.println("SUBMITNAME");
+                String name = in.readLine();
+
+                if (name == null || name.trim().isEmpty()) {
+                    name = "Anonimo-" + (int)(Math.random() * 1000);
+                }
+
+                if (!Server.isUsernameTaken(name)) {
+                    this.username = name;
+                    Server.addClient(this); // Añadimos el cliente a la lista de activos
+                    out.println("NAME_ACCEPTED"); // Enviamos la confirmación al cliente
+                    break; // Salimos del bucle de autenticación
+                } else {
+                    out.println("NAME_REJECTED"); // Enviamos el rechazo al cliente
+                }
             }
             
             System.out.println("[SERVER] " + clientSocket.getInetAddress().getHostAddress() + " ahora es " + username);
@@ -142,11 +157,8 @@ class ClientHandler implements Runnable {
                 if (inputLine.startsWith("/msg")) {
                     String[] parts = inputLine.split(" ", 3);
                     if (parts.length == 3) {
-                        String recipient = parts[1];
-                        String message = parts[2];
-                        Server.sendPrivateMessage(message, this, recipient);
+                        Server.sendPrivateMessage(parts[2], this, parts[1]);
                     } else {
-                        // Este es un mensaje de error solo para este usuario, así que lo enviamos directamente.
                         String timestamp = DateTimeFormatter.ofPattern("HH:mm").format(LocalDateTime.now());
                         sendMessage("[" + timestamp + "] [SERVER] Formato incorrecto. Usa: /msg <usuario> <mensaje>");
                     }
@@ -170,10 +182,6 @@ class ClientHandler implements Runnable {
         }
     }
 
-    /**
-     * Envía un mensaje directamente a este cliente.
-     * @param message El mensaje completo ya formateado.
-     */
     public void sendMessage(String message) {
         out.println(message);
     }
