@@ -3,17 +3,11 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 import java.net.*;
-import javax.swing.Timer;
+import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
-import javax.swing.text.JTextComponent;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
-
-import java.util.*;
-
-import com.formdev.flatlaf.FlatLightLaf;
-import com.formdev.flatlaf.FlatDarkLaf;
 
 public class ChatClientGUI {
     private JFrame frame;
@@ -21,19 +15,13 @@ public class ChatClientGUI {
     private StyledDocument doc;
     private JTextField inputField;
     private JButton sendButton;
-    private JButton settingsButton;
 
     private Socket socket;
     private BufferedReader in;
     private PrintWriter out;
 
-    private boolean isDarkMode = false;
-
     public ChatClientGUI() {
-        try {
-            UIManager.setLookAndFeel(new FlatLightLaf());
-        } catch (Exception ignored) {}
-
+        // Se ha eliminado la librería externa para simplificar.
         initializeGUI();
         connectToServer();
     }
@@ -48,7 +36,6 @@ public class ChatClientGUI {
         chatPane = new JTextPane();
         chatPane.setEditable(false);
         chatPane.setFont(new Font("SansSerif", Font.PLAIN, 14));
-        chatPane.setBackground(UIManager.getColor("Panel.background"));
         doc = chatPane.getStyledDocument();
 
         JScrollPane scrollPane = new JScrollPane(chatPane);
@@ -60,9 +47,6 @@ public class ChatClientGUI {
 
         sendButton = new JButton("Enviar");
         sendButton.setFont(new Font("SansSerif", Font.BOLD, 16));
-        sendButton.setBackground(new Color(0x007BFF));
-        sendButton.setForeground(Color.WHITE);
-        sendButton.setFocusPainted(false);
         sendButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
         sendButton.addActionListener(e -> sendMessage());
@@ -73,48 +57,12 @@ public class ChatClientGUI {
         inputPanel.add(inputField, BorderLayout.CENTER);
         inputPanel.add(sendButton, BorderLayout.EAST);
 
-        // Barra superior con botón de ajustes
-        settingsButton = new JButton("Ajustes");
-        settingsButton.setFocusPainted(false);
-        settingsButton.setContentAreaFilled(false);
-        settingsButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        settingsButton.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-
-        JPanel topBar = new JPanel(new BorderLayout());
-        topBar.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        topBar.add(settingsButton, BorderLayout.EAST);
-
-        // Menú emergente para modo claro/oscuro
-        JPopupMenu settingsMenu = new JPopupMenu();
-        JMenuItem lightMode = new JMenuItem("Modo Claro");
-        JMenuItem darkMode = new JMenuItem("Modo Oscuro");
-
-        lightMode.addActionListener(e -> switchTheme(false));
-        darkMode.addActionListener(e -> switchTheme(true));
-
-        settingsMenu.add(lightMode);
-        settingsMenu.add(darkMode);
-
-        settingsButton.addActionListener(e -> {
-            settingsMenu.show(settingsButton, 0, settingsButton.getHeight());
-        });
-
-        frame.add(topBar, BorderLayout.NORTH);
+        // Se elimina la barra superior y el botón de ajustes.
         frame.add(scrollPane, BorderLayout.CENTER);
         frame.add(inputPanel, BorderLayout.SOUTH);
         frame.setVisible(true);
     }
-
-    private void switchTheme(boolean dark) {
-        try {
-            isDarkMode = dark;
-            UIManager.setLookAndFeel(dark ? new FlatDarkLaf() : new FlatLightLaf());
-            SwingUtilities.updateComponentTreeUI(frame);
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(frame, "No se pudo cambiar el tema", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
+    
     private void connectToServer() {
         try {
             socket = new Socket("localhost", 9090);
@@ -125,12 +73,27 @@ public class ChatClientGUI {
                 try {
                     String line;
                     while ((line = in.readLine()) != null) {
-                        if (line.equals("SUBMITNAME")) {
-                            String name = JOptionPane.showInputDialog(frame, "Ingresa tu nombre de usuario:");
-                            out.println(name != null && !name.trim().isEmpty() ? name.trim() : "Anónimo");
-                        } else {
-                            animateMessage(line);
-                        }
+                        final String finalLine = line;
+                        SwingUtilities.invokeLater(() -> {
+                             if (finalLine.equals("SUBMITNAME")) {
+                                String name = JOptionPane.showInputDialog(frame, "Ingresa tu nombre de usuario:");
+                                out.println(name != null && !name.trim().isEmpty() ? name.trim() : "Anónimo");
+                            } else {
+                                SimpleAttributeSet attr = new SimpleAttributeSet();
+                                StyleConstants.setFontFamily(attr, "SansSerif");
+                                StyleConstants.setFontSize(attr, 14);
+
+                                if (finalLine.startsWith("(Privado") || finalLine.startsWith("(Mensaje para")) {
+                                    StyleConstants.setItalic(attr, true);
+                                    StyleConstants.setForeground(attr, new Color(0x008B8B)); // Un color cian oscuro
+                                } else if (finalLine.startsWith("[SERVER]")) {
+                                    StyleConstants.setBold(attr, true);
+                                    StyleConstants.setForeground(attr, Color.GRAY);
+                                }
+                                
+                                appendMessage(finalLine, attr);
+                            }
+                        });
                     }
                 } catch (IOException e) {
                     appendErrorMessage("[ERROR] Conexión perdida con el servidor.");
@@ -144,42 +107,13 @@ public class ChatClientGUI {
         }
     }
 
-    // Animación de llegada del mensaje
-    private void animateMessage(String message) {
-        int fontMin = 8;
-        int fontMax = 14;
-
-        // Estilo inicial con fuente pequeña
-        SimpleAttributeSet attr = new SimpleAttributeSet();
-        StyleConstants.setFontSize(attr, fontMin);
-        StyleConstants.setFontFamily(attr, "SansSerif");
-
-        int insertPos = doc.getLength();
-
+    private void appendMessage(String message, AttributeSet attr) {
         try {
-            doc.insertString(insertPos, message + "\n", attr);
+            doc.insertString(doc.getLength(), message + "\n", attr);
+            chatPane.setCaretPosition(doc.getLength());
         } catch (BadLocationException ex) {
             ex.printStackTrace();
         }
-
-        // Timer para animar el cambio de tamaño
-        Timer timer = new Timer(5, null);
-        final int[] size = {fontMin};
-
-        timer.addActionListener(e -> {
-            if (size[0] < fontMax) {
-                size[0]++;
-                StyleConstants.setFontSize(attr, size[0]);
-
-                // Aplicar nuevo tamaño solo al mensaje recién insertado
-                doc.setCharacterAttributes(insertPos, message.length(), attr, true);
-                chatPane.setCaretPosition(doc.getLength());
-            } else {
-                timer.stop();
-            }
-        });
-
-        timer.start();
     }
 
     private void appendErrorMessage(String message) {
@@ -188,13 +122,7 @@ public class ChatClientGUI {
         StyleConstants.setBold(errorAttr, true);
         StyleConstants.setFontSize(errorAttr, 14);
         StyleConstants.setFontFamily(errorAttr, "SansSerif");
-
-        try {
-            doc.insertString(doc.getLength(), message + "\n", errorAttr);
-            chatPane.setCaretPosition(((JTextComponent) doc).getDocument().getLength());
-        } catch (BadLocationException e) {
-            e.printStackTrace();
-        }
+        appendMessage(message, errorAttr);
     }
 
     private void sendMessage() {
