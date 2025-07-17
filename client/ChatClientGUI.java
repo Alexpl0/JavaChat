@@ -27,10 +27,28 @@ public class ChatClientGUI {
 
     private void initializeGUI() {
         frame = new JFrame("Cliente de Chat - Java");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        // Tarea 6.5: Cambiamos la operación de cierre para manejarla manualmente.
+        frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         frame.setSize(600, 450);
         frame.setLocationRelativeTo(null);
         frame.setLayout(new BorderLayout());
+
+        // Tarea 6.5: Añadimos un WindowListener para interceptar el evento de cierre.
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                int choice = JOptionPane.showConfirmDialog(frame,
+                        "¿Estás seguro de que quieres salir del chat?",
+                        "Confirmar Salida",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.QUESTION_MESSAGE);
+                if (choice == JOptionPane.YES_OPTION) {
+                    // Si el usuario confirma, cerramos la aplicación.
+                    // Esto también cerrará el socket y notificará al servidor.
+                    System.exit(0);
+                }
+            }
+        });
 
         chatPane = new JTextPane();
         chatPane.setEditable(false);
@@ -58,7 +76,6 @@ public class ChatClientGUI {
 
         frame.add(scrollPane, BorderLayout.CENTER);
         frame.add(inputPanel, BorderLayout.SOUTH);
-        // Hacemos visible el frame al final, después de la autenticación.
     }
     
     private void connectToServer() {
@@ -67,10 +84,9 @@ public class ChatClientGUI {
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             out = new PrintWriter(socket.getOutputStream(), true);
 
-            // Tarea 6.4: Bucle de autenticación que maneja el rechazo de nombres.
             while (true) {
                 String line = in.readLine();
-                if (line == null) { // El servidor cerró la conexión antes de tiempo
+                if (line == null) {
                     JOptionPane.showMessageDialog(frame, "El servidor cerró la conexión inesperadamente.", "Error", JOptionPane.ERROR_MESSAGE);
                     return;
                 }
@@ -81,13 +97,14 @@ public class ChatClientGUI {
                 } else if (line.startsWith("NAME_REJECTED")) {
                     JOptionPane.showMessageDialog(frame, "Ese nombre de usuario ya está en uso. Por favor, elige otro.", "Nombre no disponible", JOptionPane.ERROR_MESSAGE);
                 } else if (line.startsWith("NAME_ACCEPTED")) {
-                    frame.setTitle("Java Chat - " + in.readLine()); // El servidor podría enviar el nombre final
-                    frame.setVisible(true); // Mostramos la ventana principal solo después de ser aceptados
-                    break; // Salimos del bucle de autenticación
+                    // El servidor ahora debe enviar el nombre final para ponerlo en el título.
+                    String finalName = in.readLine();
+                    frame.setTitle("Java Chat - " + finalName);
+                    frame.setVisible(true);
+                    break;
                 }
             }
 
-            // Una vez autenticados, iniciamos el hilo principal de escucha.
             new Thread(new ServerListener()).start();
 
         } catch (IOException e) {
@@ -96,8 +113,6 @@ public class ChatClientGUI {
         }
     }
     
-    // El resto del código permanece igual...
-
     private void appendMessage(String message, AttributeSet attr) {
         try {
             doc.insertString(doc.getLength(), message + "\n", attr);
@@ -132,7 +147,6 @@ public class ChatClientGUI {
                 while ((serverMessage = in.readLine()) != null) {
                     final String finalMessage = serverMessage;
                     SwingUtilities.invokeLater(() -> {
-                        // Aquí ya no necesitamos manejar la autenticación, solo mensajes de chat.
                         SimpleAttributeSet attr = new SimpleAttributeSet();
                         StyleConstants.setFontFamily(attr, "SansSerif");
                         StyleConstants.setFontSize(attr, 14);
