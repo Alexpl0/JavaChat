@@ -1,0 +1,29 @@
+# Usamos una base con escritorio LXDE y VNC
+FROM dorowu/ubuntu-desktop-lxde-vnc
+
+# Usamos el usuario root (para evitar errores de usuario inexistente)
+USER root
+
+# Elimina el repo roto de Google Chrome y luego instala JDK y herramientas necesarias
+RUN rm /etc/apt/sources.list.d/google-chrome.list || true && \
+    apt-get update && \
+    apt-get install -y openjdk-17-jdk wget unzip
+
+# Establece variables de entorno JAVA_HOME
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH=$JAVA_HOME/bin:$PATH
+
+# Directorio de trabajo
+WORKDIR /root/JavaChat
+
+# Copiamos todo el código fuente al contenedor
+COPY . /root/JavaChat
+
+# Aseguramos que exista carpeta bin y compilamos el código
+RUN mkdir -p bin && javac -encoding UTF-8 -d bin server/*.java client/*.java
+
+# Exponemos el puerto VNC (opcional si ya lo hace la base)
+EXPOSE 5900
+
+# Comando por defecto para lanzar escritorio VNC
+CMD ["/startup.sh"]

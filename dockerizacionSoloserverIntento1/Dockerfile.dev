@@ -1,0 +1,14 @@
+# Imagen base con Java 17
+FROM openjdk:17-slim
+
+# Carpeta de trabajo dentro del contenedor
+WORKDIR /workspace
+
+# (Opcional) Instala algunas utilidades básicas
+RUN apt-get update && apt-get install -y vim git
+
+# Copia todo el contenido del proyecto (puede omitirse si usas volumes)
+COPY . .
+
+# Inicia una terminal interactiva
+CMD ["/bin/bash"]

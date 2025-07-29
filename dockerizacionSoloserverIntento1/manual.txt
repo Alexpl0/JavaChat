@@ -1,0 +1,56 @@
+con este iniciamos el contenedor 
+docker-compose up --build 
+
+luego un docker ps para extraer el nombre del contenedor y poder crear n cantidad de terminales para el server y para el gui 
+javachat-javachat-dev-1
+docker exec -it javachat-javachat-dev-1 /bin/bash
+
+
+-- EJEMPLO SALIDA (TERMINAL SERVER) --
+
+Last login: Tue Jul 29 00:58:52 on ttys000
+docker p%                                                                       (base) oro000492@MacBook-Pro-3 ~ % docker ps
+CONTAINER ID   IMAGE                   COMMAND       CREATED              STATUS              PORTS     NAMES
+8acef3b80166   javachat-javachat-dev   "/bin/bash"   About a minute ago   Up About a minute             javachat-javachat-dev-1
+(base) oro000492@MacBook-Pro-3 ~ % docker exec -it javachat-javachat-dev-1 /bin/bash
+root@8acef3b80166:/workspace# javac -d bin server/*.java client/*.java
+root@8acef3b80166:/workspace# java -cp bin Server
+[SERVER] El servidor de chat se está iniciando...
+[SERVER] Servidor iniciado en el puerto: 9090
+[SERVER] Esperando conexiones de clientes...
+
+
+-- EJEMPLO SALIDA (TERMINAL GUI) -- Por eso nos cambiamos a VNC (se podria correr sin GUI, solo terminal no fuera necesario ir a por VNC)
+Last login: Tue Jul 29 01:02:42 on ttys000
+(base) oro000492@MacBook-Pro-3 ~ % docker exec -it javachat-javachat-dev-1 /bin/bash
+root@8acef3b80166:/workspace# java -cp bin ChatClientGUI
+Exception in thread "AWT-EventQueue-0" java.awt.HeadlessException: 
+No X11 DISPLAY variable was set,
+but this program performed an operation which requires it.
+	at java.desktop/java.awt.GraphicsEnvironment.checkHeadless(GraphicsEnvironment.java:166)
+	at java.desktop/java.awt.Window.<init>(Window.java:553)
+	at java.desktop/java.awt.Frame.<init>(Frame.java:428)
+	at java.desktop/javax.swing.JFrame.<init>(JFrame.java:224)
+	at ChatClientGUI.initializeGUI(ChatClientGUI.java:29)
+	at ChatClientGUI.<init>(ChatClientGUI.java:24)
+	at java.desktop/java.awt.event.InvocationEvent.dispatch(InvocationEvent.java:318)
+	at java.desktop/java.awt.EventQueue.dispatchEventImpl(EventQueue.java:771)
+	at java.desktop/java.awt.EventQueue$4.run(EventQueue.java:722)
+	at java.desktop/java.awt.EventQueue$4.run(EventQueue.java:716)
+	at java.base/java.security.AccessController.doPrivileged(AccessController.java:399)
+	at java.base/java.security.ProtectionDomain$JavaSecurityAccessImpl.doIntersectionPrivilege(ProtectionDomain.java:86)
+	at java.desktop/java.awt.EventQueue.dispatchEvent(EventQueue.java:741)
+	at java.desktop/java.awt.EventDispatchThread.pumpOneEventForFilters(EventDispatchThread.java:203)
+	at java.desktop/java.awt.EventDispatchThread.pumpEventsForFilter(EventDispatchThread.java:124)
+	at java.desktop/java.awt.EventDispatchThread.pumpEventsForHierarchy(EventDispatchThread.java:113)
+	at java.desktop/java.awt.EventDispatchThread.pumpEvents(EventDispatchThread.java:109)
+	at java.desktop/java.awt.EventDispatchThread.pumpEvents(EventDispatchThread.java:101)
+	at java.desktop/java.awt.EventDispatchThread.run(EventDispatchThread.java:90)
+root@8acef3b80166:/workspace# %                                                                    (base) oro000492@MacBook-Pro-3 ~ % 
+
+
+
+
+
+
+

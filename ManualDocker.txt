@@ -1,0 +1,56 @@
+esto crea un contenedor Docker con escritorio Linux.
+La idea es que poder abrir varias ventanas del cliente (con GUI) para probar la app como si fueran usuarios distintos, todo desde la misma compu instalando lo menos posible .
+
+con una imagen de Docker con escritorio LXDE + VNC para poder entrar graficamente al contenedor, usando la imagen dorowu/ubuntu-desktop-lxde-vnc
+
+***igual chequen los assets y si pueden agregar los suyos como para alimentar las pruebas de que si jala ***
+
+Pasos:
+-- iniciar una compilacion de la imagen de Docker limpia 
+docker-compose -f docker-compose.vnc.yml build --no-cache
+
+--Iniciar el contenedor con construccion
+docker-compose -f docker-compose.vnc.yml up --build
+
+-- Instalar VNC para entrar al contenedor 
+Windows: RealVNC o TigerVNC
+macOS: VNC viewer usar funcion Nativa de Conectarse al servidor vnc://IP:puerto
+Linux: TigerVNC
+
+-- hacer la conexion en VNC 
+Usuario y puerto: localhost:5900
+Psswd: vncpassword
+
+-- entrar a la terminal dentro del VNC 
+Inicio -> SystemTools -> LXTerminal
+
+-- ir a la ruta con: cd /root/JavaChat 
+
+-- ejecutar dentro de las terminales, compilación y server en una y los clientes en terminales nuevas, todo dentro de 'cd /root/JavaChat' 
+
+-- compilar el proyecto Java dentro del contenedor
+javac -encoding UTF-8 -d bin server/*.java client/*.java
+ 
+-- Iniciar el server 
+java -cp bin Server
+
+-- Iniciar el cliente
+java -cp bin ChatClientGUI
+
+-- para recompilar y ver los cambios (se edita desde tu equipo fisico)
+
+javac -encoding UTF-8 -d bin server/*.java client/*.java
+
+
+-- cerrar correctamente el contenedor
+^C (Ctrl + C)
+Gracefully stopping... (press Ctrl+C again to force)
+[+] Stopping 1/1
+ ✔ Container javachat-vnc  Stopped                                                                                   4.5s 
+canceled
+(base) oro000492@MacBook-Pro-3 JavaChat % docker-compose -f docker-compose.vnc.yml down
+[+] Running 2/2
+ ✔ Container javachat-vnc    Removed                                                                                 0.0s 
+ ✔ Network javachat_default  Removed                                                                                 0.1s 
+(base) oro000492@MacBook-Pro-3 JavaChat % 
+
